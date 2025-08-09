@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+
+# Environment
+venv/
+.env
+
+# Database
+db.sqlite3
+
+# IDE settings
+.idea/
+.vscode/
+
+# Credentials
+*.json

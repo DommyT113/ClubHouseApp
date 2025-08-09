@@ -1,0 +1,9 @@
+from django.urls import path
+from . import views
+
+urlpatterns = [
+    path('', views.fixture_list, name='fixture_list'),
+    path('tv/', views.tv_display_view, name='tv_display'),
+    path('fixture/<int:fixture_id>/scorers/', views.update_scorers, name='update_scorers'),
+    path('add_player/', views.add_player, name='add_player'),
+]
