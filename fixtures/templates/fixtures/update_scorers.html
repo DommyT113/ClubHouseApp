@@ -4,33 +4,39 @@
     <meta charset="UTF-8">
     <title>Update Scorers</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Keep this meta as a fallback; cookie read is preferred -->
     <meta name="csrf-token" content="{{ csrf_token }}">
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background-color: #f4f4f9; color: #333; margin: 0; padding: 20px; }
+        body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background-color: #f4f4f9; color: #333; margin: 0; padding: 20px; }
         .container { max-width: 800px; margin: 40px auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        h1, h2 { color: #002d62; }
+        h1, h2 { color: #002d62; margin: 0 0 10px; }
         .fixture-info { background-color: #f9f9f9; border: 1px solid #ddd; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
         .search-section, .scorers-list { margin-bottom: 20px; }
         input[type="search"], input[type="text"], select { width: 95%; padding: 10px; font-size: 1em; border-radius: 4px; border: 1px solid #ccc; }
-        #player-results { border: 1px solid #ccc; max-height: 200px; overflow-y: auto; margin-top: 5px; border-radius: 4px; }
+        #player-results { border: 1px solid #ccc; max-height: 220px; overflow-y: auto; margin-top: 5px; border-radius: 4px; background: #fff; }
         .player-result-item { padding: 10px; cursor: pointer; }
         .player-result-item:hover { background-color: #f0f0f0; }
         .scorer-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; }
         .scorer-name { font-weight: bold; flex-grow: 1; }
-        .quantity-controls { display: flex; align-items: center; }
-        .quantity-btn { background-color: #007bff; color: white; border: none; width: 30px; height: 30px; font-size: 1.2em; cursor: pointer; border-radius: 50%; margin: 0 10px; }
-        .quantity-display { font-size: 1.2em; min-width: 20px; text-align: center; }
+        .quantity-controls { display: flex; align-items: center; gap: 10px; }
+        .quantity-btn { background-color: #007bff; color: white; border: none; width: 30px; height: 30px; font-size: 1.2em; cursor: pointer; border-radius: 50%; }
         .btn { background-color: #d9232d; color: white; padding: 12px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 1.1em; }
         a { color: #002d62; text-decoration: none; }
         a:hover { text-decoration: underline; }
-        .modal { display: none; position: fixed; z-index: 1; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4); }
-        .modal-content { background-color: #fefefe; margin: 15% auto; padding: 20px; border: 1px solid #888; width: 80%; max-width: 500px; border-radius: 8px; }
+        .empty { color: #666; font-style: italic; }
+        /* Modal */
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4); }
+        .modal-content { background-color: #fefefe; margin: 10% auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 500px; border-radius: 8px; }
         .close-btn { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+        .close-btn:hover { color: #333; }
+        .row { margin-bottom: 10px; }
+        #save-status { font-size: 0.9em; color: #666; margin-top: 8px; min-height: 1.2em; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Update Scorers</h1>
+
         <div class="fixture-info">
             <strong>Match:</strong> {{ fixture.home_team.name }} vs {{ fixture.away_team.name }}<br>
             <strong>Date:</strong> {{ fixture.match_date }}
@@ -38,8 +44,9 @@
 
         <div class="search-section">
             <h2>Add a Scorer</h2>
-            <input type="search" id="player-search" placeholder="Search for a player...">
-            <div id="player-results"></div>
+            <input type="search" id="player-search" placeholder="Search for a player…">
+            <div id="player-results" role="listbox" aria-label="Search results"></div>
+            <div id="save-status"></div>
         </div>
 
         <div class="scorers-list">
@@ -51,155 +58,237 @@
         <p style="margin-top: 20px;"><a href="{% url 'fixture_list' %}">&larr; Back to Fixtures</a></p>
     </div>
 
-    <div id="add-player-modal" class="modal">
+    <!-- Add Player Modal -->
+    <div id="add-player-modal" class="modal" aria-hidden="true">
         <div class="modal-content">
-            <span class="close-btn">&times;</span>
+            <span class="close-btn" aria-label="Close">&times;</span>
             <h2>Add New Player</h2>
-            <p>Couldn't find the player? Add them to the master list here.</p>
-            <input type="text" id="new-player-name" placeholder="Full Name" style="margin-bottom: 10px;">
-            <select id="new-player-gender" style="margin-bottom: 10px;">
-                <option value="">Select Gender...</option>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-            </select>
+            <div class="row">
+                <input type="text" id="new-player-name" placeholder="Full name">
+            </div>
+            <div class="row">
+                <select id="new-player-gender">
+                    <option value="">Select gender…</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                </select>
+            </div>
             <button class="btn" id="save-new-player-btn">Save Player</button>
             <div id="modal-error" style="color: red; margin-top: 10px;"></div>
         </div>
     </div>
 
-    {{ all_players_json|json_script:"all-players-data" }}
-    {{ existing_goals_json|json_script:"existing-goals-data" }}
+    <!-- Data from Django -->
+    {{ existing_goals|json_script:"existing-goals-data" }}
 
     <script>
     document.addEventListener('DOMContentLoaded', function () {
-        let allPlayers = JSON.parse(document.getElementById('all-players-data').textContent);
-        const existingGoals = JSON.parse(document.getElementById('existing-goals-data').textContent);
-
-        const searchInput = document.getElementById('player-search');
-        const resultsContainer = document.getElementById('player-results');
-        const scorersContainer = document.getElementById('scorers-container');
+        // ---------- Inputs from Django ----------
+        // all_players should be a JSON-safe list of {id, full_name}
+        let allPlayers = {{ all_players|safe }};
         const fixtureId = {{ fixture.id }};
-        const csrfToken = document.querySelector('[name=csrf-token]').content;
 
+        // ---------- Utilities ----------
+        function getCookie(name) {
+            const match = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+            return match ? match.pop() : '';
+        }
+        const csrfToken = getCookie('csrftoken') || (document.querySelector('[name=csrf-token]')?.content ?? '');
+
+        const qs = (sel) => document.querySelector(sel);
+        const el = {
+            search: qs('#player-search'),
+            results: qs('#player-results'),
+            scorers: qs('#scorers-container'),
+            status: qs('#save-status'),
+            addBtn: qs('#add-new-player-btn'),
+            modal: qs('#add-player-modal'),
+            closeModal: qs('.close-btn'),
+            newName: qs('#new-player-name'),
+            newGender: qs('#new-player-gender'),
+            saveNew: qs('#save-new-player-btn'),
+            modalError: qs('#modal-error'),
+        };
+
+        // ---------- Normalise players + build map ----------
+        allPlayers = Array.isArray(allPlayers) ? allPlayers : [];
+        allPlayers = allPlayers.map(p => ({ ...p, id: String(p.id) }));
+        let playersById = Object.fromEntries(allPlayers.map(p => [p.id, p]));
+
+        // ---------- Load existing scorers and normalise { [id:string]: number } ----------
+        const existingJson = qs('#existing-goals-data')?.textContent || '{}';
+        let raw;
+        try { raw = JSON.parse(existingJson); } catch { raw = {}; }
         let currentScorers = {};
+        if (Array.isArray(raw)) {
+            raw.forEach(entry => {
+                if (entry && entry.player_id != null) {
+                    currentScorers[String(entry.player_id)] = Number(entry.quantity || 1);
+                }
+            });
+        } else if (raw && typeof raw === 'object') {
+            Object.entries(raw).forEach(([k, v]) => {
+                currentScorers[String(k)] = Number(v || 1);
+            });
+        }
 
+        // ---------- Render ----------
         function renderScorers() {
-            scorersContainer.innerHTML = '';
-            const sortedScorers = Object.keys(currentScorers).sort((a, b) => {
-                const playerA = allPlayers.find(p => p.id == a);
-                const playerB = allPlayers.find(p => p.id == b);
-                if (!playerA || !playerB) return 0;
-                return playerA.full_name.localeCompare(playerB.full_name);
+            el.scorers.innerHTML = '';
+            const ids = Object.keys(currentScorers).sort((a, b) => {
+                const A = playersById[a]?.full_name || '';
+                const B = playersById[b]?.full_name || '';
+                return A.localeCompare(B);
             });
 
-            for (const playerId of sortedScorers) {
-                const player = allPlayers.find(p => p.id == playerId);
-                if (player) {
-                    const quantity = currentScorers[playerId];
-                    const row = document.createElement('div');
-                    row.className = 'scorer-row';
-                    row.innerHTML = `
-                        <div class="scorer-name">${player.full_name}</div>
-                        <div class="quantity-controls">
-                            <button class="quantity-btn minus-btn" data-player-id="${playerId}">-</button>
-                            <div class="quantity-display">${quantity}</div>
-                            <button class="quantity-btn plus-btn" data-player-id="${playerId}">+</button>
-                        </div>
-                    `;
-                    scorersContainer.appendChild(row);
-                }
+            if (ids.length === 0) {
+                el.scorers.innerHTML = '<p class="empty">No scorers added yet.</p>';
+                return;
+            }
+
+            for (const id of ids) {
+                const player = playersById[id];
+                if (!player) continue;
+                const quantity = currentScorers[id];
+
+                const row = document.createElement('div');
+                row.className = 'scorer-row';
+                row.innerHTML = `
+                    <div class="scorer-name">${player.full_name}</div>
+                    <div class="quantity-controls">
+                        <button class="quantity-btn minus-btn" data-player-id="${id}" aria-label="Decrease">-</button>
+                        <span class="quantity-display" aria-live="polite">${quantity}</span>
+                        <button class="quantity-btn plus-btn" data-player-id="${id}" aria-label="Increase">+</button>
+                    </div>
+                `;
+                el.scorers.appendChild(row);
             }
         }
 
-        async function updateGoalCount(playerId, newQuantity) {
-            if (newQuantity <= 0) {
-                delete currentScorers[String(playerId)];
-            } else {
-                currentScorers[String(playerId)] = newQuantity;
-            }
-            await saveGoal(playerId, newQuantity);
-            renderScorers();
-        }
-
+        // ---------- Network ----------
         async function saveGoal(playerId, quantity) {
             try {
-                const response = await fetch(`/fixture/${fixtureId}/scorers/`, {
+                el.status.textContent = 'Saving…';
+                const res = await fetch(`/fixture/${fixtureId}/goal/save/`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-                    body: JSON.stringify({ player_id: playerId, quantity: quantity })
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: JSON.stringify({ player_id: playerId, quantity })
                 });
-                if (!response.ok) console.error('Failed to save goal');
-            } catch (error) { console.error('Error:', error); }
-        }
-
-        function addScorer(playerId) {
-            if (!currentScorers[String(playerId)]) {
-                updateGoalCount(playerId, 1);
+                if (!res.ok) {
+                    const msg = await safeText(res);
+                    throw new Error('Save failed: ' + msg);
+                }
+                el.status.textContent = 'Saved.';
+                setTimeout(() => { el.status.textContent = ''; }, 1200);
+            } catch (err) {
+                console.error(err);
+                el.status.textContent = 'Could not save (check network/CSRF).';
             }
         }
 
-        searchInput.addEventListener('input', () => {
-            const query = searchInput.value.toLowerCase();
-            resultsContainer.innerHTML = '';
-            if (query.length < 1) return;
-            const filtered = allPlayers.filter(p => p.full_name.toLowerCase().includes(query) && !currentScorers[String(p.id)]);
-            filtered.slice(0, 10).forEach(player => {
+        async function safeText(res) {
+            try { return await res.text(); } catch { return ''; }
+        }
+
+        // ---------- Search ----------
+        el.search.addEventListener('input', () => {
+            const q = el.search.value.trim().toLowerCase();
+            el.results.innerHTML = '';
+            if (!q) return;
+
+            const list = allPlayers
+                .filter(p => p.full_name.toLowerCase().includes(q) && !currentScorers[p.id])
+                .slice(0, 10);
+
+            for (const p of list) {
                 const item = document.createElement('div');
                 item.className = 'player-result-item';
-                item.textContent = player.full_name;
-                item.addEventListener('click', () => {
-                    addScorer(player.id);
-                    searchInput.value = '';
-                    resultsContainer.innerHTML = '';
+                item.setAttribute('role', 'option');
+                item.textContent = p.full_name;
+                item.addEventListener('click', async () => {
+                    const id = p.id; // already string
+                    currentScorers[id] = (currentScorers[id] || 0) + 1; // add as 1 (or increment if already there somehow)
+                    renderScorers();
+                    el.results.innerHTML = '';
+                    el.search.value = '';
+                    await saveGoal(id, currentScorers[id]);
                 });
-                resultsContainer.appendChild(item);
-            });
-        });
-
-        scorersContainer.addEventListener('click', (e) => {
-            const playerId = e.target.dataset.playerId;
-            if (!playerId) return;
-            const currentQuantity = currentScorers[playerId] || 0;
-            if (e.target.classList.contains('plus-btn')) {
-                updateGoalCount(playerId, currentQuantity + 1);
-            } else if (e.target.classList.contains('minus-btn')) {
-                updateGoalCount(playerId, currentQuantity - 1);
+                el.results.appendChild(item);
             }
         });
 
-        const modal = document.getElementById('add-player-modal');
-        document.getElementById('add-new-player-btn').onclick = () => { modal.style.display = 'block'; };
-        document.querySelector('.close-btn').onclick = () => { modal.style.display = 'none'; };
-        window.onclick = (e) => { if (e.target == modal) { modal.style.display = 'none'; }};
+        // ---------- +/- handlers ----------
+        el.scorers.addEventListener('click', async (e) => {
+            const btn = e.target.closest('.quantity-btn');
+            if (!btn) return;
+            const id = String(btn.dataset.playerId);
+            let qty = currentScorers[id] || 0;
 
-        document.getElementById('save-new-player-btn').addEventListener('click', async () => {
-            const newName = document.getElementById('new-player-name').value;
-            const newGender = document.getElementById('new-player-gender').value;
-            const modalError = document.getElementById('modal-error');
-            modalError.textContent = '';
+            if (btn.classList.contains('plus-btn')) qty++;
+            if (btn.classList.contains('minus-btn')) qty--;
 
-            try {
-                const response = await fetch('/add_player/', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-                    body: JSON.stringify({ full_name: newName, gender: newGender })
-                });
-                const result = await response.json();
-                if (response.ok) {
-                    allPlayers.push(result.player);
-                    allPlayers.sort((a, b) => a.full_name.localeCompare(b.full_name));
-                    modal.style.display = 'none';
-                    document.getElementById('new-player-name').value = '';
-                    document.getElementById('new-player-gender').value = '';
-                } else {
-                    modalError.textContent = result.message || 'Failed to save player.';
-                }
-            } catch (error) { modalError.textContent = 'An error occurred.'; }
+            if (qty > 0) currentScorers[id] = qty;
+            else delete currentScorers[id];
+
+            renderScorers();
+            await saveGoal(id, qty);
         });
 
-        for (const playerId in existingGoals) {
-            currentScorers[playerId] = existingGoals[playerId];
-        }
+        // ---------- Modal: add new player ----------
+        el.addBtn.addEventListener('click', () => { el.modal.style.display = 'block'; el.modal.setAttribute('aria-hidden', 'false'); });
+        el.closeModal.addEventListener('click', () => { el.modal.style.display = 'none'; el.modal.setAttribute('aria-hidden', 'true'); });
+
+        window.addEventListener('click', (evt) => {
+            if (evt.target === el.modal) {
+                el.modal.style.display = 'none';
+                el.modal.setAttribute('aria-hidden', 'true');
+            }
+        });
+
+        el.saveNew.addEventListener('click', async () => {
+            el.modalError.textContent = '';
+            const name = el.newName.value.trim();
+            const gender = el.newGender.value;
+
+            if (!name || !gender) {
+                el.modalError.textContent = 'Name and gender are required.';
+                return;
+            }
+
+            try {
+                const res = await fetch('/add_player/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: JSON.stringify({ full_name: name, gender })
+                });
+                const data = await res.json();
+
+                if (!res.ok) throw new Error(data?.message || 'An error occurred.');
+
+                // Add to local cache and reindex
+                const player = { ...data.player, id: String(data.player.id) };
+                allPlayers.push(player);
+                allPlayers.sort((a, b) => a.full_name.localeCompare(b.full_name));
+                playersById = Object.fromEntries(allPlayers.map(p => [p.id, p]));
+
+                // Close + reset modal
+                el.modal.style.display = 'none';
+                el.modal.setAttribute('aria-hidden', 'true');
+                el.newName.value = '';
+                el.newGender.value = '';
+            } catch (err) {
+                console.error(err);
+                el.modalError.textContent = err.message || 'An error occurred.';
+            }
+        });
+
+        // ---------- Initial render ----------
         renderScorers();
     });
     </script>
